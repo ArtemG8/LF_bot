@@ -1,3 +1,5 @@
+# LF_bot/lexicon/lexicon_ru.py
+
 LEXICON_RU = {
     "welcome": (
         "Привет! Это Ливерпуль Фэнтези.\n"
@@ -40,10 +42,22 @@ LEXICON_RU = {
     "resetteam_success": "Ваш состав на ближайший матч успешно сброшен.",
     "resetteam_no_team": "У вас нет состава на ближайший матч, чтобы его сбрасывать.",
     "error_general": "Произошла ошибка. Попробуйте еще раз позже.",
-    "admin_panel_start": "Вы вошли в админ-панель.",
+    "admin_enter_password": "Введите пароль для входа в админ-панель.",
+    "admin_wrong_password": "Неверный пароль.",
+    "admin_panel_menu": "Админ-панель.",
+    "admin_change_password_button": "Изменить пароль",
+    "admin_add_match_button": "Добавить матч",
+    "admin_score_matches_button": "Ввести очки за матчи",
+    "admin_exit_button": "Выход",
+    "admin_enter_new_password": "Введите новый пароль:",
+    "admin_password_changed": "Вы изменили пароль! Теперь вход по: {new_password}",
+    "admin_enter_match_opponent": "Введите название команды соперника:",
+    "admin_enter_match_datetime": "Введите дату и время матча (например, 2025-12-31 18:00):",
+    "admin_invalid_datetime_format": "Неверный формат даты и времени. Используйте ГГГГ-ММ-ДД ЧЧ:ММ.",
+    "admin_match_added_success": "Матч '{opponent}' ({date} {time}) успешно добавлен.",
+    "admin_match_already_exists": "Матч с такими соперником и датой уже существует.",
     "admin_select_match_to_score": "Выберите матч, чтобы ввести очки игрокам:",
-    "admin_match_info_score": "Вы выбрали матч: {opponent} ({date} {time}).\nТеперь введите очки для каждого игрока "
-                              "поочередно.",
+    "admin_match_info_score": "Вы выбрали матч: {opponent} ({date} {time}).\nТеперь введите очки для каждого игрока поочередно.",
     "admin_enter_player_points": "Введите очки для игрока {player_name}:",
     "admin_invalid_points_format": "Неверный формат очков. Пожалуйста, введите число (целое или десятичное).",
     "admin_points_saved_success": "Очки для игрока {player_name} ({points}) сохранены.",
@@ -53,3 +67,4 @@ LEXICON_RU = {
     "admin_unknown_command": "Неизвестная команда или действие.",
     "admin_exit": "Выход из админ-панели."
 }
+

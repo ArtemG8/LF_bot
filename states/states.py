@@ -8,5 +8,10 @@ class PickTeamStates(StatesGroup):
 
 
 class AdminStates(StatesGroup):
-    selecting_match = State()
+    waiting_for_password = State()
+    admin_menu = State()
+    changing_password = State()
+    adding_match_opponent = State()
+    adding_match_datetime = State()
+    selecting_match_to_score = State()
     entering_player_points = State()

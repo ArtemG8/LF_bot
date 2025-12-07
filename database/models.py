@@ -1,8 +1,9 @@
+import asyncpg
+import datetime
 from config import Config
 
 
 async def create_tables(conn):
-    """Создает необходимые таблицы в базе данных."""
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -18,9 +19,9 @@ async def create_tables(conn):
             id SERIAL PRIMARY KEY,
             opponent VARCHAR(255) NOT NULL,
             match_datetime TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-            status VARCHAR(50) DEFAULT 'upcoming', -- 'upcoming', 'finished'
-            is_scored BOOLEAN DEFAULT FALSE, -- Для отслеживания, были ли введены очки
-            UNIQUE(opponent, match_datetime) -- <-- ДОБАВЛЕНО: Уникальный индекс для матчей
+            status VARCHAR(50) DEFAULT 'upcoming',
+            is_scored BOOLEAN DEFAULT FALSE,
+            UNIQUE(opponent, match_datetime)
         );
     ''')
 
@@ -28,7 +29,7 @@ async def create_tables(conn):
         CREATE TABLE IF NOT EXISTS players (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
-            position VARCHAR(50) NOT NULL -- 'goalkeeper', 'defender', 'midfielder', 'forward'
+            position VARCHAR(50) NOT NULL
         );
     ''')
 
@@ -37,10 +38,10 @@ async def create_tables(conn):
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
-            player_ids INTEGER[] NOT NULL, -- Массив ID игроков
+            player_ids INTEGER[] NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, match_id) -- Пользователь может иметь только один состав на матч
+            UNIQUE(user_id, match_id)
         );
     ''')
 
@@ -50,7 +51,7 @@ async def create_tables(conn):
             match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
             player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
             points REAL NOT NULL,
-            UNIQUE(match_id, player_id) -- Очки для игрока по матчу только одни
+            UNIQUE(match_id, player_id)
         );
     ''')
 
@@ -64,12 +65,18 @@ async def create_tables(conn):
         );
     ''')
 
-    print("Таблицы созданы или уже существуют")
+    await conn.execute('''
+        CREATE TABLE IF NOT EXISTS admin_settings (
+            id SERIAL PRIMARY KEY,
+            setting_name VARCHAR(255) UNIQUE NOT NULL,
+            setting_value TEXT
+        );
+    ''')
+
+    print("Таблицы созданы или уже существуют.")
 
 
 async def insert_initial_data(conn):
-    """Вставляет начальные данные если их нет"""
-    # Вставка игроков
     for position, player_names in Config.PLAYERS.items():
         for player_name in player_names:
             await conn.execute('''
@@ -85,5 +92,12 @@ async def insert_initial_data(conn):
         ('Arsenal', '2025-11-20 20:00:00', 'finished', TRUE)
         ON CONFLICT (opponent, match_datetime) DO NOTHING;
     ''')
+
+    default_password = Config.DEFAULT_ADMIN_PASSWORD
+    await conn.execute('''
+        INSERT INTO admin_settings (setting_name, setting_value) VALUES ('admin_password', $1)
+        ON CONFLICT (setting_name) DO NOTHING;
+    ''', default_password)
+
     print("Начальные данные вставлены или уже существуют.")
 

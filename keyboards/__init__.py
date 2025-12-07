@@ -1,3 +1,3 @@
 from .set_menu import main_menu_keyboard
-from .flow_kb import pickteam_positions_keyboard, admin_matches_to_score_keyboard, admin_confirm_points_keyboard
+from .flow_kb import pickteam_positions_keyboard, admin_matches_to_score_keyboard, admin_confirm_points_keyboard, admin_main_menu_keyboard
 from .keyboard_utils import create_inline_kb, create_players_keyboard, create_remove_players_keyboard

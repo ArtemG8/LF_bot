@@ -27,6 +27,24 @@ def pickteam_positions_keyboard(selected_count: int) -> InlineKeyboardMarkup:
     return kb_builder.as_markup()
 
 
+def admin_main_menu_keyboard() -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+    kb_builder.row(
+        InlineKeyboardButton(text=LEXICON_RU["admin_add_match_button"], callback_data="admin_add_match"),
+        InlineKeyboardButton(text=LEXICON_RU["admin_change_password_button"], callback_data="admin_change_password"),
+        width=2
+    )
+    kb_builder.row(
+        InlineKeyboardButton(text=LEXICON_RU["admin_score_matches_button"], callback_data="admin_score_matches"),
+        width=1
+    )
+    kb_builder.row(
+        InlineKeyboardButton(text=LEXICON_RU["admin_exit_button"], callback_data="admin_exit"),
+        width=1
+    )
+    return kb_builder.as_markup()
+
+
 def admin_matches_to_score_keyboard(matches: List[dict]) -> InlineKeyboardMarkup:
     kb_builder = InlineKeyboardBuilder()
     for match in matches:
@@ -36,13 +54,13 @@ def admin_matches_to_score_keyboard(matches: List[dict]) -> InlineKeyboardMarkup
             callback_data=f"admin_score_match_{match['id']}"
         )
     kb_builder.adjust(1)
-    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["admin_cancel"], callback_data="admin_cancel"))
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["admin_cancel"], callback_data="admin_cancel_admin_flow"))
     return kb_builder.as_markup()
 
 
 def admin_confirm_points_keyboard() -> InlineKeyboardMarkup:
     kb_builder = InlineKeyboardBuilder()
     kb_builder.button(text="Продолжить", callback_data="admin_next_player")
-    kb_builder.button(text=LEXICON_RU["admin_cancel"], callback_data="admin_cancel")
+    kb_builder.button(text=LEXICON_RU["admin_cancel"], callback_data="admin_cancel_admin_flow")
     kb_builder.adjust(2)
     return kb_builder.as_markup()
