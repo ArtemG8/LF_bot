@@ -2,56 +2,51 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.enums import ParseMode
 
-from config import conf
-from database import create_db_and_tables
-from handlers import private_user_router
-from keyboards import set_main_menu
-from middlewares import DbSessionMiddleware
+from config import Config
+from database import create_db_pool, create_tables, insert_initial_data, Database
+from middlewares import DatabaseMiddleware
+from handlers import private_user
 
-# Настройка логирования
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(filename)s:%(lineno)d #%(levelname)-8s '
-               '[%(asctime)s] - %(name)s - %(message)s'
-    )
-
-    logger.info("Starting bot...")
-
+    bot = Bot(Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     storage = MemoryStorage()
-
-    # Инициализируем бота и диспетчера
-    bot = Bot(token=conf.BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
     dp = Dispatcher(storage=storage)
 
-    # middleware для работы с БД
-    dp.message.middleware(DbSessionMiddleware())
-    dp.callback_query.middleware(DbSessionMiddleware())
+    db_pool = await create_db_pool()
+    if not db_pool:
+        logging.error("Не удалось подключиться к базе данных. Завершение работы.")
+        return
 
-    # Роутеры
-    dp.include_router(private_user_router)
+    async with db_pool.acquire() as conn:
+        await create_tables(conn)
+        await insert_initial_data(conn)
 
+    db = Database(db_pool)
 
-    # Установка команд меню
-    await set_main_menu(bot)
+    # middleware для передачи db в хэндлеры
+    dp.message.middleware(DatabaseMiddleware(db))
+    dp.callback_query.middleware(DatabaseMiddleware(db))
 
-    # Создаем таблицы в БД, если их нет
-    logger.info("Creating database tables if not exist...")
-    await create_db_and_tables()
-    logger.info("Database tables checked/created.")
+    dp.include_router(private_user.router)
 
-
-    # Пропускаем накопившиеся апдейты и запускаем polling
+    logging.info("Запуск бота...")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
-if __name__ == '__main__':
+    # close пул БД при завершении работы
+    await db_pool.close()
+    logging.info("Бот остановлен.")
+
+
+if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped!")
+        logging.info("Бот выключен.")

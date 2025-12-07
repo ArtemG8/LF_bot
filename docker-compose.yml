@@ -1,5 +1,5 @@
 services:
-  db:
+  LF_db:
     image: postgres:16
     restart: always
     environment:

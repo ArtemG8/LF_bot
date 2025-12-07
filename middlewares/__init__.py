@@ -1,1 +1,1 @@
-from .database import DbSessionMiddleware
+from .database import DatabaseMiddleware
