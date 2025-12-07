@@ -1,8 +1,8 @@
-# LF_bot/database/db.py
 import asyncpg
 import datetime
 from typing import List, Dict, Optional, Any
 from config import Config
+
 
 class Database:
     def __init__(self, pool: asyncpg.Pool):
@@ -123,20 +123,33 @@ class Database:
     async def add_match(self, opponent: str, match_datetime: datetime.datetime) -> bool:
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(
+                result = await conn.execute(
                     "INSERT INTO matches (opponent, match_datetime, status, is_scored) VALUES ($1, $2, 'upcoming', FALSE) "
                     "ON CONFLICT (opponent, match_datetime) DO NOTHING",
                     opponent, match_datetime
                 )
-                # Проверяем, была ли вставка (если ON CONFLICT DO NOTHING, то RETURNING * не вернет ничего)
-                # Проще проверить, существует ли теперь матч
-                existing_match = await conn.fetchrow(
-                    "SELECT id FROM matches WHERE opponent = $1 AND match_datetime = $2",
-                    opponent, match_datetime
-                )
-                return existing_match is not None
+                return result == 'INSERT 0 1'
             except Exception as e:
                 print(f"Ошибка при добавлении матча: {e}")
+                return False
+
+    async def get_upcoming_matches(self) -> List[Dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            matches = await conn.fetch(
+                "SELECT * FROM matches WHERE match_datetime > NOW() AND status = 'upcoming' ORDER BY match_datetime ASC"
+            )
+            return [dict(m) for m in matches]
+
+    async def update_match(self, match_id: int, opponent: str, match_datetime: datetime.datetime) -> bool:
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.execute(
+                    "UPDATE matches SET opponent = $1, match_datetime = $2, updated_at = NOW() WHERE id = $3",
+                    opponent, match_datetime, match_id
+                )
+                return result == 'UPDATE 1'
+            except Exception as e:
+                print(f"Ошибка при обновлении матча {match_id}: {e}")
                 return False
 
     async def get_finished_unscored_matches(self) -> List[Dict[str, Any]]:
@@ -150,6 +163,38 @@ class Database:
         async with self.pool.acquire() as conn:
             players = await conn.fetch("SELECT * FROM players ORDER BY position, name")
             return [dict(p) for p in players]
+
+    async def add_player(self, name: str, position: str) -> Optional[Dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            try:
+                player = await conn.fetchrow(
+                    "INSERT INTO players (name, position) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING RETURNING *",
+                    name, position
+                )
+                return dict(player) if player else None
+            except Exception as e:
+                print(f"Ошибка при добавлении игрока: {e}")
+                return None
+
+    async def update_player(self, player_id: int, name: str, position: str) -> bool:
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.execute(
+                    "UPDATE players SET name = $1, position = $2 WHERE id = $3",
+                    name, position, player_id
+                )
+                return result == 'UPDATE 1'
+            except asyncpg.exceptions.UniqueViolationError:
+                print(f"Ошибка: Игрок с именем '{name}' уже существует.")
+                return False
+            except Exception as e:
+                print(f"Ошибка при обновлении игрока {player_id}: {e}")
+                return False
+
+    async def delete_player(self, player_id: int) -> bool:
+        async with self.pool.acquire() as conn:
+            result = await conn.execute("DELETE FROM players WHERE id = $1", player_id)
+            return result == 'DELETE 1'
 
     async def save_player_points(self, match_id: int, player_id: int, points: float) -> None:
         async with self.pool.acquire() as conn:

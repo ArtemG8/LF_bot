@@ -21,10 +21,3 @@ class Config:
         "midfielder": "Полузащитники ⚙️",
         "forward": "Нападающие 🎯"
     }
-
-    PLAYERS = {
-        "goalkeeper": ["Alisson Becker", "Caoimhin Kelleher"],
-        "defender": ["Virgil van Dijk", "Trent Alexander-Arnold", "Andy Robertson", "Ibrahima Konate", "Joe Gomez"],
-        "midfielder": ["Alexis Mac Allister", "Dominik Szoboszlai", "Wataru Endo", "Harvey Elliott", "Curtis Jones"],
-        "forward": ["Mohamed Salah", "Darwin Nunez", "Cody Gakpo", "Luis Diaz", "Diogo Jota"]
-    }

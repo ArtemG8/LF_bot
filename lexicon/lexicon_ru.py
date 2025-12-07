@@ -1,5 +1,3 @@
-# LF_bot/lexicon/lexicon_ru.py
-
 LEXICON_RU = {
     "welcome": (
         "Привет! Это Ливерпуль Фэнтези.\n"
@@ -48,6 +46,8 @@ LEXICON_RU = {
     "admin_change_password_button": "Изменить пароль",
     "admin_add_match_button": "Добавить матч",
     "admin_score_matches_button": "Ввести очки за матчи",
+    "admin_manage_players_button": "Управление игроками",
+    "admin_manage_matches_button": "Управление матчами",
     "admin_exit_button": "Выход",
     "admin_enter_new_password": "Введите новый пароль:",
     "admin_password_changed": "Вы изменили пароль! Теперь вход по: {new_password}",
@@ -56,6 +56,11 @@ LEXICON_RU = {
     "admin_invalid_datetime_format": "Неверный формат даты и времени. Используйте ГГГГ-ММ-ДД ЧЧ:ММ.",
     "admin_match_added_success": "Матч '{opponent}' ({date} {time}) успешно добавлен.",
     "admin_match_already_exists": "Матч с такими соперником и датой уже существует.",
+    "admin_match_updated_success": "Матч '{opponent}' ({date} {time}) успешно обновлен.",
+    "admin_match_not_found": "Матч не найден.",
+    "admin_select_match_to_edit": "Выберите матч для редактирования:",
+    "admin_edit_match_opponent_prompt": "Введите новое название соперника для матча '{current_opponent}' ({current_date} {current_time}):",
+    "admin_edit_match_datetime_prompt": "Введите новую дату и время для матча '{current_opponent}' ({current_date} {current_time}) (ГГГГ-ММ-ДД ЧЧ:ММ):",
     "admin_select_match_to_score": "Выберите матч, чтобы ввести очки игрокам:",
     "admin_match_info_score": "Вы выбрали матч: {opponent} ({date} {time}).\nТеперь введите очки для каждого игрока поочередно.",
     "admin_enter_player_points": "Введите очки для игрока {player_name}:",
@@ -64,7 +69,26 @@ LEXICON_RU = {
     "admin_all_points_entered": "Очки для всех игроков матча сохранены. Рейтинги пользователей обновлены.",
     "admin_match_scoring_done": "Ввод очков завершен. Возврат в главное меню.",
     "admin_cancel": "Отменено.",
+    "admin_cancel_admin_flow": "Действие отменено.",
     "admin_unknown_command": "Неизвестная команда или действие.",
-    "admin_exit": "Выход из админ-панели."
+    "admin_player_management_menu": "Меню управления игроками.",
+    "admin_add_player_button": "Добавить игрока",
+    "admin_edit_player_button": "Изменить игрока",
+    "admin_delete_player_button": "Удалить игрока",
+    "admin_back_to_admin_menu": "⬅️ В админ-меню",
+    "admin_enter_player_name": "Введите имя и фамилию игрока:",
+    "admin_choose_player_position": "Выберите позицию для игрока:",
+    "admin_player_added_success": "Игрок '{player_name}' ({position_name}) успешно добавлен.",
+    "admin_player_already_exists": "Игрок с таким именем уже существует.",
+    "admin_select_player_to_edit": "Выберите игрока для изменения:",
+    "admin_edit_player_name_prompt": "Введите новое имя для игрока '{current_name}':",
+    "admin_edit_player_position_prompt": "Выберите новую позицию для игрока '{current_name}':",
+    "admin_player_updated_success": "Игрок '{player_name}' успешно обновлен.",
+    "admin_player_not_found": "Игрок не найден.",
+    "admin_select_player_to_delete": "Выберите игрока для удаления:",
+    "admin_confirm_delete_player": "Вы уверены, что хотите удалить игрока '{player_name}'?",
+    "admin_player_deleted_success": "Игрок '{player_name}' успешно удален.",
+    "admin_no_players_found": "Игроки не найдены.",
+    "admin_no_matches_found": "Матчи не найдены.",
 }
 

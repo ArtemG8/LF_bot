@@ -9,7 +9,11 @@ from config import Config
 from lexicon import LEXICON_RU
 from keyboards import (
     main_menu_keyboard, pickteam_positions_keyboard,
-    create_players_keyboard, create_remove_players_keyboard, admin_matches_to_score_keyboard, admin_main_menu_keyboard,
+    create_players_keyboard, create_remove_players_keyboard,
+    admin_main_menu_keyboard, admin_matches_to_score_keyboard,
+    admin_player_management_keyboard, create_players_list_keyboard,
+    create_positions_selection_keyboard, admin_match_management_keyboard,
+    create_matches_list_keyboard, admin_confirm_delete_keyboard
 )
 from database import Database
 from states import PickTeamStates, AdminStates
@@ -176,7 +180,7 @@ async def cmd_leaderboard(event: Message | CallbackQuery, db: Database):
             text += LEXICON_RU["leaderboard_entry"].format(
                 i + 1,
                 username=entry['username'],
-                score=round(entry['total_score'], 2)  # Округляем для отображения
+                score=round(entry['total_score'], 2)
             ) + "\n"
     else:
         text += "Пока нет данных для таблицы лидеров."
@@ -376,7 +380,182 @@ async def process_admin_password(message: Message, state: FSMContext, db: Databa
         await message.answer(LEXICON_RU["admin_wrong_password"])
 
 
-@router.callback_query(F.data == "admin_add_match", StateFilter(AdminStates.admin_menu))
+@router.callback_query(F.data == "admin_back_to_main_menu", StateFilter(AdminStates))
+async def admin_back_to_main_menu_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.admin_menu)
+    await callback.message.edit_text(LEXICON_RU["admin_panel_menu"], reply_markup=admin_main_menu_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_manage_players", StateFilter(AdminStates.admin_menu))
+async def admin_manage_players_menu(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.managing_players)
+    await callback.message.edit_text(LEXICON_RU["admin_player_management_menu"],
+                                     reply_markup=admin_player_management_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_add_player", StateFilter(AdminStates.managing_players))
+async def admin_add_player_start(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.adding_player_name)
+    await callback.message.edit_text(LEXICON_RU["admin_enter_player_name"])
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.adding_player_name))
+async def admin_process_player_name(message: Message, state: FSMContext):
+    player_name = message.text
+    await state.update_data(new_player_name=player_name)
+    await state.set_state(AdminStates.adding_player_position)
+    await message.answer(LEXICON_RU["admin_choose_player_position"], reply_markup=create_positions_selection_keyboard())
+
+
+@router.callback_query(F.data.startswith("admin_select_position_"), StateFilter(AdminStates.adding_player_position))
+async def admin_process_player_position(callback: CallbackQuery, state: FSMContext, db: Database):
+    position_key = callback.data.split("_")[-1]
+    data = await state.get_data()
+    player_name = data.get("new_player_name")
+
+    if player_name and position_key:
+        player = await db.add_player(player_name, position_key)
+        if player:
+            await callback.message.edit_text(
+                LEXICON_RU["admin_player_added_success"].format(
+                    player_name=player_name, position_name=Config.POSITIONS[position_key]
+                ),
+                reply_markup=admin_player_management_keyboard()
+            )
+        else:
+            await callback.message.edit_text(LEXICON_RU["admin_player_already_exists"],
+                                             reply_markup=admin_player_management_keyboard())
+    else:
+        await callback.message.edit_text(LEXICON_RU["error_general"], reply_markup=admin_player_management_keyboard())
+    await state.set_state(AdminStates.managing_players)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_edit_player", StateFilter(AdminStates.managing_players))
+async def admin_edit_player_start(callback: CallbackQuery, state: FSMContext, db: Database):
+    players = await db.get_all_players()
+    if not players:
+        await callback.answer(LEXICON_RU["admin_no_players_found"], show_alert=True)
+        return
+
+    await state.set_state(AdminStates.selecting_player_to_edit)
+    await callback.message.edit_text(LEXICON_RU["admin_select_player_to_edit"],
+                                     reply_markup=create_players_list_keyboard(players, "admin_selected_player_edit"))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_selected_player_edit_"),
+                       StateFilter(AdminStates.selecting_player_to_edit))
+async def admin_selected_player_for_edit(callback: CallbackQuery, state: FSMContext, db: Database):
+    player_id = int(callback.data.split("_")[-1])
+    player_details = await db.get_player_by_id(player_id)
+    if not player_details:
+        await callback.answer(LEXICON_RU["admin_player_not_found"], show_alert=True)
+        await state.set_state(AdminStates.managing_players)
+        await callback.message.edit_text(LEXICON_RU["admin_player_management_menu"],
+                                         reply_markup=admin_player_management_keyboard())
+        return
+
+    await state.update_data(editing_player_id=player_id, original_player_name=player_details['name'])
+    await state.set_state(AdminStates.editing_player_name)
+    await callback.message.edit_text(
+        LEXICON_RU["admin_edit_player_name_prompt"].format(current_name=player_details['name']))
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.editing_player_name))
+async def admin_process_edited_player_name(message: Message, state: FSMContext):
+    new_name = message.text
+    await state.update_data(edited_player_name=new_name)
+    await state.set_state(AdminStates.editing_player_position)
+    data = await state.get_data()
+    original_name = data.get('original_player_name', '')
+    await message.answer(LEXICON_RU["admin_edit_player_position_prompt"].format(current_name=original_name),
+                         reply_markup=create_positions_selection_keyboard(callback_prefix="admin_edited_position"))
+
+
+@router.callback_query(F.data.startswith("admin_edited_position_"), StateFilter(AdminStates.editing_player_position))
+async def admin_process_edited_player_position(callback: CallbackQuery, state: FSMContext, db: Database):
+    new_position = callback.data.split("_")[-1]
+    data = await state.get_data()
+    player_id = data.get("editing_player_id")
+    new_name = data.get("edited_player_name")
+
+    if player_id and new_name and new_position:
+        success = await db.update_player(player_id, new_name, new_position)
+        if success:
+            await callback.message.edit_text(LEXICON_RU["admin_player_updated_success"].format(player_name=new_name),
+                                             reply_markup=admin_player_management_keyboard())
+        else:
+            await callback.message.edit_text(LEXICON_RU["error_general"],
+                                             reply_markup=admin_player_management_keyboard())
+    else:
+        await callback.message.edit_text(LEXICON_RU["error_general"], reply_markup=admin_player_management_keyboard())
+    await state.set_state(AdminStates.managing_players)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_delete_player", StateFilter(AdminStates.managing_players))
+async def admin_delete_player_start(callback: CallbackQuery, state: FSMContext, db: Database):
+    players = await db.get_all_players()
+    if not players:
+        await callback.answer(LEXICON_RU["admin_no_players_found"], show_alert=True)
+        return
+
+    await state.set_state(AdminStates.selecting_player_to_delete)
+    await callback.message.edit_text(LEXICON_RU["admin_select_player_to_delete"],
+                                     reply_markup=create_players_list_keyboard(players, "admin_selected_player_delete"))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_selected_player_delete_"),
+                       StateFilter(AdminStates.selecting_player_to_delete))
+async def admin_confirm_delete_player(callback: CallbackQuery, state: FSMContext, db: Database):
+    player_id = int(callback.data.split("_")[-1])
+    player_details = await db.get_player_by_id(player_id)
+    if not player_details:
+        await callback.answer(LEXICON_RU["admin_player_not_found"], show_alert=True)
+        await state.set_state(AdminStates.managing_players)
+        await callback.message.edit_text(LEXICON_RU["admin_player_management_menu"],
+                                         reply_markup=admin_player_management_keyboard())
+        return
+
+    await state.update_data(player_to_delete_id=player_id, player_to_delete_name=player_details['name'])
+    await state.set_state(AdminStates.confirming_player_delete)
+    await callback.message.edit_text(
+        LEXICON_RU["admin_confirm_delete_player"].format(player_name=player_details['name']),
+        reply_markup=admin_confirm_delete_keyboard(player_id)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("confirm_delete_player_"), StateFilter(AdminStates.confirming_player_delete))
+async def admin_execute_delete_player(callback: CallbackQuery, state: FSMContext, db: Database):
+    player_id = int(callback.data.split("_")[-1])
+    data = await state.get_data()
+    player_name = data.get('player_to_delete_name', 'игрока')
+
+    success = await db.delete_player(player_id)
+    if success:
+        await callback.message.edit_text(LEXICON_RU["admin_player_deleted_success"].format(player_name=player_name),
+                                         reply_markup=admin_player_management_keyboard())
+    else:
+        await callback.message.edit_text(LEXICON_RU["error_general"], reply_markup=admin_player_management_keyboard())
+    await state.set_state(AdminStates.managing_players)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_manage_matches", StateFilter(AdminStates.admin_menu))
+async def admin_manage_matches_menu(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.managing_matches)
+    await callback.message.edit_text(LEXICON_RU["admin_panel_menu"], reply_markup=admin_match_management_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_add_match", StateFilter(AdminStates.managing_matches))
 async def admin_add_match_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminStates.adding_match_opponent)
     await callback.message.edit_text(LEXICON_RU["admin_enter_match_opponent"])
@@ -384,7 +563,7 @@ async def admin_add_match_start(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(StateFilter(AdminStates.adding_match_opponent))
-async def admin_process_match_opponent(message: Message, state: FSMContext):
+async def admin_process_match_opponent_add(message: Message, state: FSMContext):
     opponent = message.text
     await state.update_data(new_match_opponent=opponent)
     await state.set_state(AdminStates.adding_match_datetime)
@@ -392,7 +571,7 @@ async def admin_process_match_opponent(message: Message, state: FSMContext):
 
 
 @router.message(StateFilter(AdminStates.adding_match_datetime))
-async def admin_process_match_datetime(message: Message, state: FSMContext, db: Database):
+async def admin_process_match_datetime_add(message: Message, state: FSMContext, db: Database):
     datetime_str = message.text
     try:
         match_dt = datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
@@ -416,32 +595,110 @@ async def admin_process_match_datetime(message: Message, state: FSMContext, db: 
                     date=match_dt.strftime("%d.%m.%Y"),
                     time=match_dt.strftime("%H:%M")
                 ),
-                reply_markup=admin_main_menu_keyboard()
+                reply_markup=admin_match_management_keyboard()
             )
         else:
-            await message.answer(LEXICON_RU["admin_match_already_exists"], reply_markup=admin_main_menu_keyboard())
+            await message.answer(LEXICON_RU["admin_match_already_exists"],
+                                 reply_markup=admin_match_management_keyboard())
     else:
-        await message.answer(LEXICON_RU["error_general"], reply_markup=admin_main_menu_keyboard())
+        await message.answer(LEXICON_RU["error_general"], reply_markup=admin_match_management_keyboard())
 
-    await state.set_state(AdminStates.admin_menu)
+    await state.set_state(AdminStates.managing_matches)
 
 
-@router.callback_query(F.data == "admin_change_password", StateFilter(AdminStates.admin_menu))
-async def admin_change_password_start(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(AdminStates.changing_password)
-    await callback.message.edit_text(LEXICON_RU["admin_enter_new_password"])
+@router.callback_query(F.data == "admin_edit_matches", StateFilter(AdminStates.managing_matches))
+async def admin_edit_matches_start(callback: CallbackQuery, state: FSMContext, db: Database):
+    upcoming_matches = await db.get_upcoming_matches()
+    if not upcoming_matches:
+        await callback.answer(LEXICON_RU["admin_no_matches_found"], show_alert=True)
+        return
+
+    await state.set_state(AdminStates.selecting_match_to_edit)
+    await callback.message.edit_text(LEXICON_RU["admin_select_match_to_edit"],
+                                     reply_markup=create_matches_list_keyboard(upcoming_matches,
+                                                                               "admin_selected_match_edit"))
     await callback.answer()
 
 
-@router.message(StateFilter(AdminStates.changing_password))
-async def admin_process_new_password(message: Message, state: FSMContext, db: Database):
-    new_password = message.text
-    await db.set_admin_setting('admin_password', new_password)
-    await state.set_state(AdminStates.admin_menu)
-    await message.answer(
-        LEXICON_RU["admin_password_changed"].format(new_password=new_password),
-        reply_markup=admin_main_menu_keyboard()
+@router.callback_query(F.data.startswith("admin_selected_match_edit_"),
+                       StateFilter(AdminStates.selecting_match_to_edit))
+async def admin_selected_match_for_edit(callback: CallbackQuery, state: FSMContext, db: Database):
+    match_id = int(callback.data.split("_")[-1])
+    match_details = await db.get_match_details(match_id)
+    if not match_details:
+        await callback.answer(LEXICON_RU["admin_match_not_found"], show_alert=True)
+        await state.set_state(AdminStates.managing_matches)
+        await callback.message.edit_text(LEXICON_RU["admin_panel_menu"], reply_markup=admin_match_management_keyboard())
+        return
+
+    await state.update_data(
+        editing_match_id=match_id,
+        original_match_opponent=match_details['opponent'],
+        original_match_datetime=match_details['match_datetime']
     )
+
+    date_str = match_details['match_datetime'].strftime("%d.%m.%Y")
+    time_str = match_details['match_datetime'].strftime("%H:%M")
+
+    await state.set_state(AdminStates.editing_match_opponent)
+    await callback.message.edit_text(
+        LEXICON_RU["admin_edit_match_opponent_prompt"].format(
+            current_opponent=match_details['opponent'], current_date=date_str, current_time=time_str
+        )
+    )
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.editing_match_opponent))
+async def admin_process_edited_match_opponent(message: Message, state: FSMContext):
+    new_opponent = message.text
+    await state.update_data(edited_match_opponent=new_opponent)
+    await state.set_state(AdminStates.editing_match_datetime)
+    data = await state.get_data()
+    original_match_opponent = data.get('original_match_opponent')
+    original_match_datetime: datetime.datetime = data.get('original_match_datetime')
+    date_str = original_match_datetime.strftime("%d.%m.%Y")
+    time_str = original_match_datetime.strftime("%H:%M")
+    await message.answer(
+        LEXICON_RU["admin_edit_match_datetime_prompt"].format(
+            current_opponent=original_match_opponent, current_date=date_str, current_time=time_str
+        )
+    )
+
+
+@router.message(StateFilter(AdminStates.editing_match_datetime))
+async def admin_process_edited_match_datetime(message: Message, state: FSMContext, db: Database):
+    datetime_str = message.text
+    try:
+        new_match_dt = datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
+        if new_match_dt < datetime.datetime.now():
+            await message.answer(
+                "Дата и время матча не могут быть в прошлом. Пожалуйста, введите корректное будущее время.")
+            return
+    except ValueError:
+        await message.answer(LEXICON_RU["admin_invalid_datetime_format"])
+        return
+
+    data = await state.get_data()
+    match_id = data.get("editing_match_id")
+    edited_opponent = data.get("edited_match_opponent")
+
+    if match_id and edited_opponent and new_match_dt:
+        success = await db.update_match(match_id, edited_opponent, new_match_dt)
+        if success:
+            await message.answer(
+                LEXICON_RU["admin_match_updated_success"].format(
+                    opponent=edited_opponent,
+                    date=new_match_dt.strftime("%d.%m.%Y"),
+                    time=new_match_dt.strftime("%H:%M")
+                ),
+                reply_markup=admin_match_management_keyboard()
+            )
+        else:
+            await message.answer(LEXICON_RU["error_general"], reply_markup=admin_match_management_keyboard())
+    else:
+        await message.answer(LEXICON_RU["error_general"], reply_markup=admin_match_management_keyboard())
+    await state.set_state(AdminStates.managing_matches)
 
 
 @router.callback_query(F.data == "admin_score_matches", StateFilter(AdminStates.admin_menu))
@@ -468,7 +725,7 @@ async def admin_select_match_for_scoring(callback: CallbackQuery, state: FSMCont
     match_details = await db.get_match_details(match_id)
 
     if not match_details:
-        await callback.answer("Матч не найден.", show_alert=True)
+        await callback.answer(LEXICON_RU["admin_match_not_found"], show_alert=True)
         await state.set_state(AdminStates.admin_menu)
         await callback.message.edit_text(LEXICON_RU["admin_panel_menu"], reply_markup=admin_main_menu_keyboard())
         return
@@ -537,15 +794,34 @@ async def admin_process_player_points(message: Message, state: FSMContext, db: D
         await state.clear()
 
 
+@router.callback_query(F.data == "admin_change_password", StateFilter(AdminStates.admin_menu))
+async def admin_change_password_start(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.changing_password)
+    await callback.message.edit_text(LEXICON_RU["admin_enter_new_password"])
+    await callback.answer()
+
+
+@router.message(StateFilter(AdminStates.changing_password))
+async def admin_process_new_password(message: Message, state: FSMContext, db: Database):
+    new_password = message.text
+    await db.set_admin_setting('admin_password', new_password)
+    await state.set_state(AdminStates.admin_menu)
+    await message.answer(
+        LEXICON_RU["admin_password_changed"].format(new_password=new_password),
+        reply_markup=admin_main_menu_keyboard()
+    )
+
+
 @router.callback_query(F.data == "admin_exit", StateFilter(AdminStates.admin_menu))
 async def admin_exit_panel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text(LEXICON_RU["admin_exit"], reply_markup=main_menu_keyboard())
+    await callback.message.edit_text(LEXICON_RU["admin_exit_button"], reply_markup=main_menu_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data == "admin_cancel_admin_flow", StateFilter("*"))
 async def admin_cancel_flow(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminStates.admin_menu)
-    await callback.message.edit_text(LEXICON_RU["admin_cancel"], reply_markup=admin_main_menu_keyboard())
+    await callback.message.edit_text(LEXICON_RU["admin_cancel_admin_flow"], reply_markup=admin_main_menu_keyboard())
     await callback.answer()
+

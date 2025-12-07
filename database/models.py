@@ -76,13 +76,45 @@ async def create_tables(conn):
     print("Таблицы созданы или уже существуют.")
 
 
+NEW_PLAYERS_DATA = [
+    {"name": "Alisson", "position": "goalkeeper"},
+    {"name": "Giorgi Mamardashvili", "position": "goalkeeper"},
+    {"name": "Freddie Woodman", "position": "goalkeeper"},
+
+    {"name": "Ibrahima Konaté", "position": "defender"},
+    {"name": "Giovanni Leoni", "position": "defender"},
+    {"name": "Virgil van Dijk", "position": "defender"},
+    {"name": "Joe Gomez", "position": "defender"},
+    {"name": "Rhys Williams", "position": "defender"},
+    {"name": "Milos Kerkez", "position": "defender"},
+    {"name": "Andrew Robertson", "position": "defender"},
+    {"name": "Jeremie Frimpong", "position": "defender"},
+    {"name": "Conor Bradley", "position": "defender"},
+
+    {"name": "Ryan Gravenberch", "position": "midfielder"},
+    {"name": "Stefan Bajcetic", "position": "midfielder"},
+    {"name": "Wataru Endo", "position": "midfielder"},
+    {"name": "Alexis Mac Allister", "position": "midfielder"},
+    {"name": "Curtis Jones", "position": "midfielder"},
+    {"name": "Trey Nyoni", "position": "midfielder"},
+    {"name": "Florian Wirtz", "position": "midfielder"},
+    {"name": "Dominik Szoboszlai", "position": "midfielder"},
+
+    {"name": "Cody Gakpo", "position": "forward"},
+    {"name": "Rio Ngumoha", "position": "forward"},
+    {"name": "Mohamed Salah", "position": "forward"},
+    {"name": "Federico Chiesa", "position": "forward"},
+    {"name": "Alexander Isak", "position": "forward"},
+    {"name": "Hugo Ekitiké", "position": "forward"},
+]
+
+
 async def insert_initial_data(conn):
-    for position, player_names in Config.PLAYERS.items():
-        for player_name in player_names:
-            await conn.execute('''
-                INSERT INTO players (name, position) VALUES ($1, $2)
-                ON CONFLICT (name) DO NOTHING;
-            ''', player_name, position)
+    for player_data in NEW_PLAYERS_DATA:
+        await conn.execute('''
+            INSERT INTO players (name, position) VALUES ($1, $2)
+            ON CONFLICT (name) DO NOTHING;
+        ''', player_data["name"], player_data["position"])
 
     await conn.execute('''
         INSERT INTO matches (opponent, match_datetime, status, is_scored) VALUES
@@ -100,4 +132,3 @@ async def insert_initial_data(conn):
     ''', default_password)
 
     print("Начальные данные вставлены или уже существуют.")
-
