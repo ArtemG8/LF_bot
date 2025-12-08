@@ -80,6 +80,7 @@ NEW_PLAYERS_DATA = [
     {"name": "Alisson", "position": "goalkeeper"},
     {"name": "Giorgi Mamardashvili", "position": "goalkeeper"},
     {"name": "Freddie Woodman", "position": "goalkeeper"},
+    {"name": "Armin  Pecsi", "position": "goalkeeper"},
 
 
     {"name": "Ibrahima Konaté", "position": "defender"},

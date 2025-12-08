@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 
 from config import Config
 from database import create_db_pool, create_tables, insert_initial_data, Database
+from keyboards.set_menu import set_main_menu
 from middlewares import DatabaseMiddleware
 from handlers import private_user
 
@@ -35,7 +36,7 @@ async def main():
     dp.callback_query.middleware(DatabaseMiddleware(db))
 
     dp.include_router(private_user.router)
-
+    await set_main_menu(bot)
     logging.info("Запуск бота...")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)

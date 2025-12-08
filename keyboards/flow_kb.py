@@ -6,6 +6,7 @@ from typing import List
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
+    print("DEBUG: main_menu_keyboard() is being called!")  # <-- Эта строка уже была, но проверьте ее наличие
     kb_builder = InlineKeyboardBuilder()
     kb_builder.row(
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_pickteam"], callback_data="pickteam"),
@@ -21,12 +22,12 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_leaderboard"], callback_data="leaderboard"),
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_weekly_leaderboard"],
                              callback_data="weekly_leaderboard"),
-        width=2
-    )
-    kb_builder.row(
-        InlineKeyboardButton(text=LEXICON_RU["main_menu_button_resetteam"], callback_data="resetteam"),
         width=1
     )
+    # kb_builder.row(
+    #
+    #     width=1
+    # )
     return kb_builder.as_markup()
 
 
@@ -47,11 +48,31 @@ def pickteam_positions_keyboard(selected_count: int) -> InlineKeyboardMarkup:
         text=LEXICON_RU["pickteam_remove_button"],
         callback_data="remove_player"
     )
-    kb_builder.row(confirm_button, remove_button, width=2)
+
+    reset_button = InlineKeyboardButton(
+        text=LEXICON_RU["main_menu_button_resetteam"],
+        callback_data="resetteam"
+    )
+    kb_builder.row(confirm_button, remove_button, reset_button, width=3)
     kb_builder.row(
         InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"),
         width=1
     )
+    return kb_builder.as_markup()
+
+
+def create_players_keyboard(players: List[dict], selected_player_ids: List[int]) -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+    for player in players:
+        is_selected = player['id'] in selected_player_ids
+        status_emoji = "✅ " if is_selected else ""
+        kb_builder.button(
+            text=f"{status_emoji}{player['name']}",
+            callback_data=f"player_select_{player['id']}"
+        )
+    kb_builder.adjust(2)
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"),
+                   width=1)
     return kb_builder.as_markup()
 
 

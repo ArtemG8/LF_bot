@@ -23,6 +23,7 @@ router = Router()
 
 
 async def send_main_menu(message: Message, text: str = LEXICON_RU["welcome"]):
+    print(f"DEBUG: send_main_menu called for user {message.from_user.id}")  # <-- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
     await message.answer(text=text, reply_markup=main_menu_keyboard())
 
 
@@ -50,6 +51,7 @@ async def get_team_display_text(player_ids: list, db: Database) -> str:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: Database):
+    print(f"DEBUG: cmd_start called for user {message.from_user.id}")  # <-- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
     user = await db.register_user(message.from_user.id, message.from_user.username or f"user_{message.from_user.id}")
     if user:
         await send_main_menu(message, LEXICON_RU["welcome"])
@@ -900,7 +902,7 @@ async def admin_process_new_password(message: Message, state: FSMContext, db: Da
 @router.callback_query(F.data == "admin_exit", StateFilter(AdminStates.admin_menu))
 async def admin_exit_panel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text(LEXICON_RU["admin_exit"], reply_markup=main_menu_keyboard())
+    await callback.message.edit_text(LEXICON_RU["admin_exit_button"], reply_markup=main_menu_keyboard())
     await callback.answer()
 
 
@@ -918,3 +920,4 @@ async def admin_cancel_flow(callback: CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.admin_menu)
         await callback.message.edit_text(LEXICON_RU["admin_cancel_admin_flow"], reply_markup=admin_main_menu_keyboard())
     await callback.answer()
+

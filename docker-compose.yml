@@ -17,13 +17,13 @@ services:
     restart: always
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
-      DB_HOST: db
+      DB_HOST: liverpool_fantasy_db
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
     depends_on:
-      - db
+      - LF_db
 
 volumes:
   postgres_data:
