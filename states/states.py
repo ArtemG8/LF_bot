@@ -13,15 +13,16 @@ class AdminStates(StatesGroup):
     changing_password = State()
 
     # Match Management
+    managing_matches = State()
     adding_match_opponent = State()
     adding_match_datetime = State()
-    managing_matches = State()
     selecting_match_to_edit = State()
     editing_match_opponent = State()
     editing_match_datetime = State()
 
     # Player Management
     managing_players = State()
+    viewing_all_players = State()
     adding_player_name = State()
     adding_player_position = State()
     selecting_player_to_edit = State()
@@ -29,6 +30,7 @@ class AdminStates(StatesGroup):
     editing_player_position = State()
     selecting_player_to_delete = State()
     confirming_player_delete = State()
+    confirming_delete_all_players = State()
 
     # Score Management
     selecting_match_to_score = State()

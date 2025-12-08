@@ -81,6 +81,7 @@ NEW_PLAYERS_DATA = [
     {"name": "Giorgi Mamardashvili", "position": "goalkeeper"},
     {"name": "Freddie Woodman", "position": "goalkeeper"},
 
+
     {"name": "Ibrahima Konaté", "position": "defender"},
     {"name": "Giovanni Leoni", "position": "defender"},
     {"name": "Virgil van Dijk", "position": "defender"},
@@ -90,6 +91,8 @@ NEW_PLAYERS_DATA = [
     {"name": "Andrew Robertson", "position": "defender"},
     {"name": "Jeremie Frimpong", "position": "defender"},
     {"name": "Conor Bradley", "position": "defender"},
+    {"name": "Andy Robertson", "position": "defender"},
+    {"name": "Calvin Ramsay", "position": "defender"},
 
     {"name": "Ryan Gravenberch", "position": "midfielder"},
     {"name": "Stefan Bajcetic", "position": "midfielder"},
