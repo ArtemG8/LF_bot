@@ -406,9 +406,9 @@ async def process_confirm_team(callback: CallbackQuery, state: FSMContext, db: D
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID:
-        await message.answer(LEXICON_RU["admin_unknown_command"])
-        return
+    # if message.from_user.id != Config.ADMIN_ID:
+    #     await message.answer(LEXICON_RU["admin_unknown_command"])
+    #     return
 
     await state.set_state(AdminStates.waiting_for_password)
     await message.answer(LEXICON_RU["admin_enter_password"])
