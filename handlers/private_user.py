@@ -112,6 +112,23 @@ async def cmd_pickteam(event: Message | CallbackQuery, state: FSMContext, db: Da
         await event.answer()
 
 
+@router.callback_query(F.data == "back_to_pickteam", StateFilter(PickTeamStates.choosing_player))
+async def back_to_pickteam_from_players(callback: CallbackQuery, state: FSMContext, db: Database):
+    data = await state.get_data()
+    selected_players_ids: list = data.get("selected_players", [])
+    
+    selected_count = len(selected_players_ids)
+    text = LEXICON_RU["pickteam_intro"] + f"\n{LEXICON_RU['picked_players_count'].format(selected_count)}"
+    text += "\n\n" + await get_team_display_text(selected_players_ids, db)
+    
+    await state.set_state(PickTeamStates.choosing_position)
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=pickteam_positions_keyboard(selected_count)
+    )
+    await callback.answer()
+
+
 @router.message(Command("myteam"))
 @router.callback_query(F.data == "myteam")
 async def cmd_myteam(event: Message | CallbackQuery, db: Database):
@@ -920,4 +937,3 @@ async def admin_cancel_flow(callback: CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.admin_menu)
         await callback.message.edit_text(LEXICON_RU["admin_cancel_admin_flow"], reply_markup=admin_main_menu_keyboard())
     await callback.answer()
-

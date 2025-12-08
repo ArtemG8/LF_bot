@@ -13,6 +13,7 @@ LEXICON_RU = {
     "main_menu_button_leaderboard": "Общий рейтинг",
     "main_menu_button_weekly_leaderboard": "Рейтинг за неделю",
     "back_to_main_menu_button": "⬅️ В главное меню",
+    "back_to_pickteam_button": "⬅️ Назад",
     "team_picked_success": "Ваш состав успешно сохранен на матч!",
     "team_not_found": "У вас пока нет состава на этот матч. Выберите его с помощью команды /pickteam.",
     "pickteam_intro": "Выберите ровно 5 игроков для своей команды.",

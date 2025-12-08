@@ -2,6 +2,8 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import List, Dict, Tuple
 
+from lexicon import LEXICON_RU
+
 
 def create_inline_kb(
         width: int,
@@ -44,6 +46,8 @@ def create_players_keyboard(players: List[Dict], selected_player_ids: List[int])
             callback_data=f"player_select_{player['id']}"
         )
     kb_builder.adjust(2)
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_pickteam_button"], callback_data="back_to_pickteam"),
+                   width=1)
     return kb_builder.as_markup()
 
 
