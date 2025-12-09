@@ -28,10 +28,6 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_notifications"], callback_data="notifications"),
         width=1
     )
-    # kb_builder.row(
-    #
-    #     width=1
-    # )
     return kb_builder.as_markup()
 
 
@@ -218,10 +214,13 @@ def match_results_keyboard(matches: List[dict], current_page: int, total_pages: 
     pagination_buttons = []
     if total_pages > 1:
         if current_page > 0:
-            pagination_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"match_results_page_{current_page - 1}"))
-        pagination_buttons.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="match_results_current_page"))
+            pagination_buttons.append(
+                InlineKeyboardButton(text="⬅️ Назад", callback_data=f"match_results_page_{current_page - 1}"))
+        pagination_buttons.append(
+            InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="match_results_current_page"))
         if current_page < total_pages - 1:
-            pagination_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"match_results_page_{current_page + 1}"))
+            pagination_buttons.append(
+                InlineKeyboardButton(text="Вперед ➡️", callback_data=f"match_results_page_{current_page + 1}"))
         kb_builder.row(*pagination_buttons)
 
     kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"))
@@ -245,10 +244,12 @@ def notifications_keyboard(notifications_enabled: bool) -> InlineKeyboardMarkup:
     kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"))
     return kb_builder.as_markup()
 
+
 def admin_confirm_notification_keyboard() -> InlineKeyboardMarkup:
     kb_builder = InlineKeyboardBuilder()
     kb_builder.button(text=LEXICON_RU["admin_send_notification_button"], callback_data="admin_send_notification_yes")
-    kb_builder.button(text=LEXICON_RU["admin_dont_send_notification_button"], callback_data="admin_send_notification_no")
+    kb_builder.button(text=LEXICON_RU["admin_dont_send_notification_button"],
+                      callback_data="admin_send_notification_no")
     kb_builder.adjust(2)
     return kb_builder.as_markup()
 

@@ -104,7 +104,8 @@ LEXICON_RU = {
     "no_finished_matches": "Нет завершенных матчей для отображения.",
     "admin_view_all_players_header": "Все игроки:",
     "admin_player_entry_view": "ID: {id}, Имя: {name}, Позиция: {position}",
-    "admin_confirm_remove_all_players": "ВНИМАНИЕ! Вы собираетесь удалить ВСЕХ игроков из базы данных. Это действие необратимо и приведет к удалению всех составов пользователей. Вы уверены?",
+    "admin_confirm_remove_all_players": "ВНИМАНИЕ! Вы собираетесь удалить ВСЕХ игроков из базы данных. Это действие "
+                                        "необратимо и приведет к удалению всех составов пользователей. Вы уверены?",
     "admin_all_players_removed_success": "Все игроки успешно удалены.",
     "match_results_details_header": "Результаты матча: {opponent} ({date} {time})",
     "match_player_score_entry": "{}. {player_name} - {points} очков {emoji}",
@@ -118,8 +119,10 @@ LEXICON_RU = {
     "notifications_toggle_off": "Выключить уведомления",
     "notifications_success_on": "Уведомления включены. Вы будете получать сообщения о результатах матчей.",
     "notifications_success_off": "Уведомления выключены. Вы не будете получать сообщения о результатах матчей.",
-    "notifications_match_scored_message": "⚽️ Результаты матча {opponent} ({date} {time}) были внесены! Вы можете просмотреть их в разделе \"Результаты матчей\".",
-    "admin_prompt_notification_message": "Введите дополнительное сообщение для уведомления (или отправьте \"-\", чтобы пропустить):",
+    "notifications_match_scored_message": "⚽️ Результаты матча {opponent} ({date} {time}) были внесены! Вы можете "
+                                          "просмотреть их в разделе \"Результаты матчей\".",
+    "admin_prompt_notification_message": "Введите дополнительное сообщение для уведомления (или отправьте \"-\", "
+                                         "чтобы пропустить):",
     "admin_confirm_send_notification": "Отправить уведомление?",
     "admin_send_notification_button": "✅ Отправить",
     "admin_dont_send_notification_button": "❌ Не отправлять",
