@@ -115,7 +115,7 @@ async def cmd_pickteam(event: Message | CallbackQuery, state: FSMContext, db: Da
         return
 
     match_id = next_match['id']
-    deadline = next_match['match_datetime'] - timedelta(minutes=1)
+    deadline = next_match['match_datetime'] - timedelta(minutes=30)
 
     if datetime.datetime.now() > deadline:
         await event.answer(LEXICON_RU["deadline_passed"],
@@ -199,7 +199,7 @@ async def cmd_schedule(event: Message | CallbackQuery, db: Database):
 
     if next_match:
         match_dt = next_match['match_datetime']
-        deadline_dt = match_dt - timedelta(minutes=1)
+        deadline_dt = match_dt - timedelta(minutes=30)
         now = datetime.datetime.now()
 
         time_left = match_dt - now
@@ -371,7 +371,7 @@ async def cmd_resetteam(event: Message | CallbackQuery, db: Database):
         return
 
     match_id = next_match['id']
-    deadline = next_match['match_datetime'] - timedelta(minutes=1)
+    deadline = next_match['match_datetime'] - timedelta(minutes=30)
 
     if datetime.datetime.now() > deadline:
         await event.answer(LEXICON_RU["deadline_passed"],
