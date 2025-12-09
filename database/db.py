@@ -3,6 +3,7 @@ import datetime
 from typing import List, Dict, Optional, Any
 from config import Config
 from collections import defaultdict
+from utils.timezone import naive_now
 
 
 class Database:
@@ -29,17 +30,22 @@ class Database:
 
     async def get_next_match(self) -> Optional[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             match = await conn.fetchrow(
-                "SELECT * FROM matches WHERE match_datetime > NOW() AND status = 'upcoming' ORDER BY match_datetime "
-                "ASC LIMIT 1 "
+                "SELECT * FROM matches WHERE match_datetime > $1 AND status = 'upcoming' ORDER BY match_datetime "
+                "ASC LIMIT 1 ",
+                current_time
             )
             return dict(match) if match else None
 
     async def get_matches_for_month(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
+            month_later = current_time + datetime.timedelta(days=30)
             matches = await conn.fetch(
-                "SELECT * FROM matches WHERE match_datetime BETWEEN NOW() AND NOW() + INTERVAL '1 month' ORDER BY "
-                "match_datetime ASC "
+                "SELECT * FROM matches WHERE match_datetime BETWEEN $1 AND $2 ORDER BY "
+                "match_datetime ASC ",
+                current_time, month_later
             )
             return [dict(m) for m in matches]
 
@@ -64,10 +70,11 @@ class Database:
 
     async def save_user_team(self, user_id: int, match_id: int, player_ids: List[int]) -> None:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             await conn.execute(
                 "INSERT INTO user_teams (user_id, match_id, player_ids) VALUES ($1, $2, $3) "
-                "ON CONFLICT (user_id, match_id) DO UPDATE SET player_ids = $3, updated_at = NOW()",
-                user_id, match_id, player_ids
+                "ON CONFLICT (user_id, match_id) DO UPDATE SET player_ids = $3, updated_at = $4",
+                user_id, match_id, player_ids, current_time
             )
 
     async def delete_user_team(self, user_id: int, match_id: int) -> None:
@@ -121,17 +128,20 @@ class Database:
 
     async def get_weekly_leaderboard(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
+            week_ago = current_time - datetime.timedelta(days=7)
             leaderboard = await conn.fetch(
                 """
                 SELECT u.username, SUM(ums.score) as weekly_score
                 FROM users u
                 JOIN user_match_scores ums ON u.id = ums.user_id
                 JOIN matches m ON ums.match_id = m.id
-                WHERE m.match_datetime >= NOW() - INTERVAL '7 days'
+                WHERE m.match_datetime >= $1
                 GROUP BY u.username
                 ORDER BY weekly_score DESC
                 LIMIT 10
-                """
+                """,
+                week_ago
             )
             return [dict(row) for row in leaderboard]
 
@@ -167,15 +177,19 @@ class Database:
 
     async def get_upcoming_matches(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             matches = await conn.fetch(
-                "SELECT * FROM matches WHERE match_datetime > NOW() AND status = 'upcoming' ORDER BY match_datetime ASC"
+                "SELECT * FROM matches WHERE match_datetime > $1 AND status = 'upcoming' ORDER BY match_datetime ASC",
+                current_time
             )
             return [dict(m) for m in matches]
 
     async def get_all_finished_matches(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             await conn.execute(
-                "UPDATE matches SET status = 'finished' WHERE match_datetime < NOW() AND status = 'upcoming'"
+                "UPDATE matches SET status = 'finished' WHERE match_datetime < $1 AND status = 'upcoming'",
+                current_time
             )
             matches = await conn.fetch(
                 "SELECT * FROM matches WHERE status = 'finished' ORDER BY match_datetime DESC"
@@ -196,8 +210,10 @@ class Database:
 
     async def get_finished_unscored_matches(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             await conn.execute(
-                "UPDATE matches SET status = 'finished' WHERE match_datetime < NOW() AND status = 'upcoming'"
+                "UPDATE matches SET status = 'finished' WHERE match_datetime < $1 AND status = 'upcoming'",
+                current_time
             )
             matches = await conn.fetch(
                 "SELECT * FROM matches WHERE status = 'finished' AND is_scored = FALSE ORDER BY match_datetime DESC"
@@ -323,8 +339,10 @@ class Database:
 
     async def get_finished_matches_paginated(self, offset: int, limit: int) -> Dict[str, Any]:
         async with self.pool.acquire() as conn:
+            current_time = naive_now()
             await conn.execute(
-                "UPDATE matches SET status = 'finished' WHERE match_datetime < NOW() AND status = 'upcoming'"
+                "UPDATE matches SET status = 'finished' WHERE match_datetime < $1 AND status = 'upcoming'",
+                current_time
             )
             total_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM matches WHERE status = 'finished' AND is_scored = TRUE"

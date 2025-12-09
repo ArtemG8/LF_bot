@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from config import Config
 from lexicon import LEXICON_RU
+from utils.timezone import naive_now, parse_datetime_naive
 from keyboards import (
     main_menu_keyboard, pickteam_positions_keyboard,
     create_players_keyboard, create_remove_players_keyboard,
@@ -200,7 +201,7 @@ async def cmd_schedule(event: Message | CallbackQuery, db: Database):
     if next_match:
         match_dt = next_match['match_datetime']
         deadline_dt = match_dt - timedelta(minutes=30)
-        now = datetime.datetime.now()
+        now = naive_now()
 
         time_left = match_dt - now
         deadline_countdown = deadline_dt - now
@@ -373,7 +374,7 @@ async def cmd_resetteam(event: Message | CallbackQuery, db: Database):
     match_id = next_match['id']
     deadline = next_match['match_datetime'] - timedelta(minutes=30)
 
-    if datetime.datetime.now() > deadline:
+    if naive_now() > deadline:
         await event.answer(LEXICON_RU["deadline_passed"],
                            show_alert=True if isinstance(event, CallbackQuery) else False)
         if isinstance(event, CallbackQuery):
@@ -783,8 +784,8 @@ async def admin_process_match_opponent_add(message: Message, state: FSMContext):
 async def admin_process_match_datetime_add(message: Message, state: FSMContext, db: Database):
     datetime_str = message.text
     try:
-        match_dt = datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
-        if match_dt < datetime.datetime.now():
+        match_dt = parse_datetime_naive(datetime_str, "%Y-%m-%d %H:%M")
+        if match_dt < naive_now():
             await message.answer(
                 "Дата и время матча не могут быть в прошлом. Пожалуйста, введите корректное будущее время.")
             return
@@ -879,8 +880,8 @@ async def admin_process_edited_match_opponent(message: Message, state: FSMContex
 async def admin_process_edited_match_datetime(message: Message, state: FSMContext, db: Database):
     datetime_str = message.text
     try:
-        new_match_dt = datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
-        if new_match_dt < datetime.datetime.now():
+        new_match_dt = parse_datetime_naive(datetime_str, "%Y-%m-%d %H:%M")
+        if new_match_dt < naive_now():
             await message.answer(
                 "Дата и время матча не могут быть в прошлом. Пожалуйста, введите корректное будущее время.")
             return
