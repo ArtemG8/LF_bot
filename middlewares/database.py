@@ -6,8 +6,9 @@ from database import Database
 
 
 class DatabaseMiddleware(BaseMiddleware):
-    def __init__(self, db_session: Database):
+    def __init__(self, db_session: Database, bot):
         self.db_session = db_session
+        self.bot = bot
 
     async def __call__(
             self,
@@ -16,4 +17,5 @@ class DatabaseMiddleware(BaseMiddleware):
             data: Dict[str, Any]
     ) -> Any:
         data["db"] = self.db_session
+        data["bot"] = self.bot
         return await handler(event, data)

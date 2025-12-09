@@ -1,9 +1,10 @@
 import datetime
 from datetime import timedelta
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from collections import defaultdict  # NEW: Import defaultdict
 
 from config import Config
 from lexicon import LEXICON_RU
@@ -14,7 +15,8 @@ from keyboards import (
     admin_player_management_keyboard, create_players_list_keyboard,
     create_positions_selection_keyboard, admin_match_management_keyboard,
     create_matches_list_keyboard, admin_confirm_delete_keyboard,
-    admin_confirm_delete_all_players_keyboard
+    admin_confirm_delete_all_players_keyboard, match_results_keyboard,
+    match_details_keyboard, notifications_keyboard, admin_confirm_notification_keyboard
 )
 from database import Database
 from states import PickTeamStates, AdminStates
@@ -23,7 +25,7 @@ router = Router()
 
 
 async def send_main_menu(message: Message, text: str = LEXICON_RU["welcome"]):
-    print(f"DEBUG: send_main_menu called for user {message.from_user.id}")  # <-- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
+    print(f"DEBUG: send_main_menu called for user {message.from_user.id}")
     await message.answer(text=text, reply_markup=main_menu_keyboard())
 
 
@@ -41,17 +43,47 @@ def format_timedelta(td: timedelta) -> str:
     return " ".join(parts) if parts else "менее минуты"
 
 
+# REWRITTEN: get_team_display_text to group and order players
 async def get_team_display_text(player_ids: list, db: Database) -> str:
     if not player_ids:
         return "Ваш состав пуст."
 
-    player_names = await db.get_player_names_from_ids(player_ids)
-    return "Ваш текущий состав:\n" + "\n".join([f"• {name}" for name in player_names])
+    # Fetch all player details for the selected IDs, ordered by position and then order_index
+    async with db.pool.acquire() as conn:
+        players = await conn.fetch(
+            """
+            SELECT name, position, order_index
+            FROM players
+            WHERE id = ANY($1::int[])
+            ORDER BY position, order_index
+            """,
+            player_ids
+        )
+
+    # Group players by position
+    grouped_players = defaultdict(list)
+    for player in players:
+        grouped_players[player['position']].append(player['name'])
+
+    display_text_parts = ["Ваш текущий состав:"]
+
+    # Define the desired order of positions for display
+    # This order should align with how players are grouped in NEW_PLAYERS_DATA
+    position_keys_ordered = ["goalkeeper", "defender", "midfielder", "forward"]
+
+    for position_key in position_keys_ordered:
+        if grouped_players[position_key]:
+            position_display_name = Config.POSITIONS.get(position_key, position_key.capitalize())
+            display_text_parts.append(f"\n{position_display_name}:")
+            for player_name in grouped_players[position_key]:
+                display_text_parts.append(f"• {player_name}")
+
+    return "\n".join(display_text_parts)
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: Database):
-    print(f"DEBUG: cmd_start called for user {message.from_user.id}")  # <-- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
+    print(f"DEBUG: cmd_start called for user {message.from_user.id}")
     user = await db.register_user(message.from_user.id, message.from_user.username or f"user_{message.from_user.id}")
     if user:
         await send_main_menu(message, LEXICON_RU["welcome"])
@@ -59,8 +91,17 @@ async def cmd_start(message: Message, db: Database):
         await message.answer(LEXICON_RU["error_general"])
 
 
-@router.callback_query(F.data == "back_to_main_menu", StateFilter(PickTeamStates))
-async def back_to_main_menu_from_pickteam(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "back_to_main_menu")
+async def back_to_main_menu_handler(callback: CallbackQuery, state: FSMContext, db: Database):
+    # Логика сохранения последнего состава при выходе из PickTeamStates
+    current_state = await state.get_state()
+    if current_state and current_state.startswith("PickTeamStates"):
+        data = await state.get_data()
+        selected_players_ids: list = data.get("selected_players", [])
+        user_id = (await db.get_user(callback.from_user.id))['id']
+        if selected_players_ids:
+            await db.save_last_selected_team(user_id, selected_players_ids)
+
     await state.clear()
     await callback.message.edit_text(LEXICON_RU["welcome"], reply_markup=main_menu_keyboard())
     await callback.answer()
@@ -70,7 +111,8 @@ async def back_to_main_menu_from_pickteam(callback: CallbackQuery, state: FSMCon
 @router.callback_query(F.data == "pickteam")
 async def cmd_pickteam(event: Message | CallbackQuery, state: FSMContext, db: Database):
     chat_id = event.from_user.id
-    user_id = (await db.get_user(chat_id))['id']
+    user_data = await db.get_user(chat_id)
+    user_id = user_data['id']
 
     next_match = await db.get_next_match()
     if not next_match:
@@ -91,9 +133,7 @@ async def cmd_pickteam(event: Message | CallbackQuery, state: FSMContext, db: Da
     player_ids = current_team['player_ids'] if current_team else []
 
     if not player_ids:
-        last_team = await db.get_last_user_team(user_id)
-        if last_team:
-            player_ids = last_team['player_ids']
+        player_ids = user_data.get('last_selected_team_ids', [])
 
     await state.set_state(PickTeamStates.choosing_position)
     await state.update_data(
@@ -116,11 +156,11 @@ async def cmd_pickteam(event: Message | CallbackQuery, state: FSMContext, db: Da
 async def back_to_pickteam_from_players(callback: CallbackQuery, state: FSMContext, db: Database):
     data = await state.get_data()
     selected_players_ids: list = data.get("selected_players", [])
-    
+
     selected_count = len(selected_players_ids)
     text = LEXICON_RU["pickteam_intro"] + f"\n{LEXICON_RU['picked_players_count'].format(selected_count)}"
     text += "\n\n" + await get_team_display_text(selected_players_ids, db)
-    
+
     await state.set_state(PickTeamStates.choosing_position)
     await callback.message.edit_text(
         text=text,
@@ -141,10 +181,12 @@ async def cmd_myteam(event: Message | CallbackQuery, db: Database):
         return
 
     match_id = next_match['id']
-    user_team = await db.get_user_team_with_names(user_id, match_id)
+    # Use the new get_team_display_text for consistent formatting
+    current_team = await db.get_user_team(user_id, match_id)
+    player_ids = current_team['player_ids'] if current_team else []
 
-    if user_team and user_team['player_names']:
-        text = "Ваш состав на ближайший матч:\n" + "\n".join([f"• {name}" for name in user_team['player_names']])
+    if player_ids:
+        text = await get_team_display_text(player_ids, db)
     else:
         text = LEXICON_RU["team_not_found"]
 
@@ -197,26 +239,106 @@ async def cmd_schedule(event: Message | CallbackQuery, db: Database):
         await event.answer()
 
 
-@router.callback_query(F.data == "finished_matches")
-async def cmd_finished_matches(callback: CallbackQuery, db: Database):
-    finished_matches = await db.get_all_finished_matches()
+@router.callback_query(F.data == "match_results")
+@router.callback_query(F.data.startswith("match_results_page_"))
+async def cmd_match_results(callback: CallbackQuery, db: Database):
+    page = 0
+    if callback.data.startswith("match_results_page_"):
+        page = int(callback.data.split("_")[-1])
+
+    offset = page * Config.MATCHES_PER_PAGE
+    limit = Config.MATCHES_PER_PAGE
+
+    result = await db.get_finished_matches_paginated(offset, limit)
+    matches = result["matches"]
+    total_count = result["total_count"]
+
     text = LEXICON_RU["finished_matches_header"]
 
-    if not finished_matches:
+    if not matches:
         text += "\n" + LEXICON_RU["no_finished_matches"]
     else:
-        for match in finished_matches:
-            match_dt = match['match_datetime']
-            text += LEXICON_RU["match_entry"].format(
-                date=match_dt.strftime("%d.%m.%Y"),
-                opponent=match['opponent']
-            ) + "\n"
+        # No need to list matches here, as each match will have a dedicated button
+        text += "\nВыберите матч для просмотра деталей:"
 
-    await callback.message.edit_text(text=text, reply_markup=main_menu_keyboard())
+    total_pages = (total_count + Config.MATCHES_PER_PAGE - 1) // Config.MATCHES_PER_PAGE
+
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=match_results_keyboard(matches, page, total_pages)
+    )
     await callback.answer()
 
 
-@router.message(Command("leaderboard"))
+@router.callback_query(F.data.startswith("match_details_"))
+async def cmd_match_details(callback: CallbackQuery, db: Database):
+    data_parts = callback.data.split("_")
+    match_id = int(data_parts[2])
+    current_page_from_callback = int(data_parts[3]) if len(data_parts) > 3 else 0 # Извлекаем номер страницы
+    user_id = (await db.get_user(callback.from_user.id))['id']
+
+    match_details = await db.get_match_details(match_id)
+    if not match_details:
+        await callback.answer(LEXICON_RU["admin_match_not_found"], show_alert=True)
+        return
+
+    player_data = await db.get_match_player_scores_and_user_teams(match_id, user_id)
+    player_scores = player_data["player_scores"]
+    user_team_player_ids = player_data["user_team_player_ids"]
+
+    date_str = match_details['match_datetime'].strftime("%d.%m.%Y")
+    time_str = match_details['match_datetime'].strftime("%H:%M")
+
+    text_parts = [
+        LEXICON_RU["match_results_details_header"].format(
+            opponent=match_details['opponent'], date=date_str, time=time_str
+        ),
+        "\n"
+    ]
+
+    user_total_score = 0.0
+    if player_scores:
+        text_parts.append("Очки игроков:")
+        for i, player in enumerate(player_scores):
+            emoji = "🌟" if player['player_id'] in user_team_player_ids else ""
+            text_parts.append(
+                LEXICON_RU["match_player_score_entry"].format(
+                    i + 1,
+                    player_name=player['name'],
+                    position=Config.POSITIONS.get(player['position'], player['position'].capitalize()),
+                    points=round(player['points'], 2),
+                    emoji=emoji
+                )
+            )
+            if player['player_id'] in user_team_player_ids:
+                user_total_score += player['points']
+        text_parts.append(f"\n{LEXICON_RU['match_total_user_score'].format(score=round(user_total_score, 2))}")
+    else:
+        text_parts.append("Нет данных по очкам игроков для этого матча.")
+        # If user team exists but no scores, display that.
+        if user_team_player_ids:
+             user_team_names = await db.get_player_names_from_ids(user_team_player_ids)
+             text_parts.append(f"Ваша команда на этот матч: {', '.join(user_team_names)}")
+        else:
+            text_parts.append(LEXICON_RU["match_no_team_selected"])
+
+    # Determine the current page for returning to the match list
+    # This assumes that the `match_details_` callback is always called from a paginated list
+    # It would be better to pass the current page explicitly in the callback data.
+    # For now, we'll try to infer it or default to 0.
+    # This might require a state machine or more complex callback data.
+    # For simplicity, we'll use a default of 0 for now.
+    # A more robust solution would involve passing the `page` argument from `cmd_match_results`
+    # to the `match_details_` callback.
+    # For now, we assume the user is coming from the first page of results.
+
+    await callback.message.edit_text(
+        text="\n".join(text_parts),
+        reply_markup=match_details_keyboard(match_id, current_page_from_callback)
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "leaderboard")
 async def cmd_leaderboard(event: Message | CallbackQuery, db: Database):
     leaderboard_data = await db.get_leaderboard()
@@ -348,7 +470,9 @@ async def process_remove_player_request(callback: CallbackQuery, state: FSMConte
         await callback.answer(LEXICON_RU["pickteam_no_players_to_remove"], show_alert=True)
         return
 
-    player_names_map = {p['id']: p['name'] for p in await db.get_all_players_sorted()}
+    # Fetch all players sorted by order_index for the map
+    all_players = await db.get_all_players_sorted()
+    player_names_map = {p['id']: p['name'] for p in all_players}
     players_to_remove = [(p_id, player_names_map.get(p_id, "Неизвестный игрок")) for p_id in selected_players_ids]
 
     await state.set_state(PickTeamStates.removing_player)
@@ -414,6 +538,7 @@ async def process_confirm_team(callback: CallbackQuery, state: FSMContext, db: D
         return
 
     await db.save_user_team(user_id, match_id, selected_players_ids)
+    await db.save_last_selected_team(user_id, selected_players_ids) # Сохраняем как последний выбранный состав
     await state.clear()
 
     text = LEXICON_RU["team_picked_success"] + "\n\n" + await get_team_display_text(selected_players_ids, db)
@@ -834,8 +959,8 @@ async def admin_select_match_for_scoring(callback: CallbackQuery, state: FSMCont
         await callback.message.edit_text(LEXICON_RU["admin_panel_menu"], reply_markup=admin_main_menu_keyboard())
         return
 
-    all_players = await db.get_all_players_sorted()
-    all_players.sort(key=lambda p: (p['position'], p['name']))
+    all_players = await db.get_all_players_sorted()  # Now sorted by order_index
+    # all_players.sort(key=lambda p: (p['position'], p['name'])) # This sort is no longer needed if using order_index
 
     await state.update_data(
         admin_current_match_id=match_id,
@@ -859,7 +984,7 @@ async def admin_select_match_for_scoring(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(StateFilter(AdminStates.entering_player_points))
-async def admin_process_player_points(message: Message, state: FSMContext, db: Database):
+async def admin_process_player_points(message: Message, state: FSMContext, db: Database, bot: Bot):
     try:
         points = float(message.text.replace(',', '.'))
     except ValueError:
@@ -894,8 +1019,78 @@ async def admin_process_player_points(message: Message, state: FSMContext, db: D
                     await db.save_player_points(admin_current_match_id, player_id, pts)
                 await db.update_user_scores_for_match(admin_current_match_id)
 
-        await message.answer(LEXICON_RU["admin_all_points_entered"], reply_markup=main_menu_keyboard())
-        await state.clear()
+        await message.answer(LEXICON_RU["admin_all_points_entered"])
+        # Сохраняем match_details в state для дальнейшей отправки уведомления
+        match_details = data.get("admin_match_details")
+        await state.update_data(admin_match_details=match_details)
+        await state.set_state(AdminStates.entering_notification_message)
+        await message.answer(LEXICON_RU["admin_prompt_notification_message"])
+
+
+@router.message(StateFilter(AdminStates.entering_notification_message))
+async def admin_process_notification_message(message: Message, state: FSMContext):
+    additional_message = message.text if message.text != "-" else ""
+    await state.update_data(admin_additional_notification_message=additional_message)
+
+    data = await state.get_data()
+    match_details = data.get("admin_match_details")
+
+    opponent = match_details['opponent']
+    date_str = match_details['match_datetime'].strftime("%d.%m.%Y")
+    time_str = match_details['match_datetime'].strftime("%H:%M")
+
+    base_notification_text = LEXICON_RU["notifications_match_scored_message"].format(
+        opponent=opponent, date=date_str, time=time_str
+    )
+    if additional_message:
+        preview_text = f"{additional_message}\n\n{base_notification_text}"
+    else:
+        preview_text = base_notification_text
+
+    await state.set_state(AdminStates.confirming_notification_send)
+    await message.answer(
+        text=f"{LEXICON_RU['admin_confirm_send_notification']}\n\n{preview_text}",
+        reply_markup=admin_confirm_notification_keyboard()
+    )
+
+
+@router.callback_query(F.data == "admin_send_notification_yes", StateFilter(AdminStates.confirming_notification_send))
+async def admin_execute_send_notification(callback: CallbackQuery, state: FSMContext, db: Database, bot: Bot):
+    data = await state.get_data()
+    match_details = data.get("admin_match_details")
+    additional_message = data.get("admin_additional_notification_message", "")
+
+    if match_details:
+        opponent = match_details['opponent']
+        date_str = match_details['match_datetime'].strftime("%d.%m.%Y")
+        time_str = match_details['match_datetime'].strftime("%H:%M")
+        base_notification_text = LEXICON_RU["notifications_match_scored_message"].format(
+            opponent=opponent, date=date_str, time=time_str
+        )
+        if additional_message:
+            final_notification_text = f"{additional_message}\n\n{base_notification_text}"
+        else:
+            final_notification_text = base_notification_text
+
+        users_to_notify = await db.get_users_with_notifications_enabled()
+        for user in users_to_notify:
+            try:
+                await bot.send_message(user['telegram_id'], final_notification_text, reply_markup=main_menu_keyboard())
+            except Exception as e:
+                print(f"Не удалось отправить уведомление пользователю {user['telegram_id']}: {e}")
+
+    await state.clear()
+    await callback.message.edit_text(LEXICON_RU["admin_notification_sent_success"], reply_markup=admin_main_menu_keyboard())
+    await callback.answer()
+    await state.set_state(AdminStates.admin_menu)
+
+
+@router.callback_query(F.data == "admin_send_notification_no", StateFilter(AdminStates.confirming_notification_send))
+async def admin_cancel_send_notification(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text(LEXICON_RU["admin_notification_cancelled"], reply_markup=admin_main_menu_keyboard())
+    await callback.answer()
+    await state.set_state(AdminStates.admin_menu)
 
 
 @router.callback_query(F.data == "admin_change_password", StateFilter(AdminStates.admin_menu))
@@ -937,3 +1132,41 @@ async def admin_cancel_flow(callback: CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.admin_menu)
         await callback.message.edit_text(LEXICON_RU["admin_cancel_admin_flow"], reply_markup=admin_main_menu_keyboard())
     await callback.answer()
+
+
+@router.callback_query(F.data == "notifications")
+async def cmd_notifications(callback: CallbackQuery, db: Database):
+    user = await db.get_user(callback.from_user.id)
+    notifications_enabled = user['receive_notifications']
+
+    status_text = LEXICON_RU["notifications_enabled"] if notifications_enabled else LEXICON_RU["notifications_disabled"]
+    text = f"{LEXICON_RU['notifications_header']}\n\n{status_text}"
+
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=notifications_keyboard(notifications_enabled)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("notifications_toggle_"))
+async def toggle_notifications(callback: CallbackQuery, db: Database):
+    user_id = (await db.get_user(callback.from_user.id))['id']
+    toggle_action = callback.data.split("_")[-1]
+    new_preference = True if toggle_action == "on" else False
+
+    await db.update_user_notification_preference(user_id, new_preference)
+
+    status_message = LEXICON_RU["notifications_success_on"] if new_preference else LEXICON_RU["notifications_success_off"]
+
+    user = await db.get_user(callback.from_user.id) # Re-fetch user to get updated preference
+    notifications_enabled = user['receive_notifications']
+
+    status_text = LEXICON_RU["notifications_enabled"] if notifications_enabled else LEXICON_RU["notifications_disabled"]
+    text = f"{LEXICON_RU['notifications_header']}\n\n{status_text}"
+
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=notifications_keyboard(notifications_enabled)
+    )
+    await callback.answer(status_message)

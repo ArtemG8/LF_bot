@@ -21,3 +21,5 @@ class Config:
         "midfielder": "Полузащитники ⚙️",
         "forward": "Нападающие 🎯"
     }
+
+    MATCHES_PER_PAGE = 5

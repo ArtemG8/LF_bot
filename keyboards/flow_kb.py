@@ -15,13 +15,17 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     )
     kb_builder.row(
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_schedule"], callback_data="schedule"),
-        InlineKeyboardButton(text=LEXICON_RU["main_menu_button_finished_matches"], callback_data="finished_matches"),
-        width=2
+        width=1
     )
     kb_builder.row(
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_leaderboard"], callback_data="leaderboard"),
         InlineKeyboardButton(text=LEXICON_RU["main_menu_button_weekly_leaderboard"],
                              callback_data="weekly_leaderboard"),
+        InlineKeyboardButton(text=LEXICON_RU["main_menu_button_match_results"], callback_data="match_results"),
+        width=1
+    )
+    kb_builder.row(
+        InlineKeyboardButton(text=LEXICON_RU["main_menu_button_notifications"], callback_data="notifications"),
         width=1
     )
     # kb_builder.row(
@@ -197,6 +201,55 @@ def admin_matches_to_score_keyboard(matches: List[dict]) -> InlineKeyboardMarkup
     kb_builder.adjust(1)
     kb_builder.row(
         InlineKeyboardButton(text=LEXICON_RU["admin_cancel_admin_flow"], callback_data="admin_cancel_admin_flow"))
+    return kb_builder.as_markup()
+
+
+def match_results_keyboard(matches: List[dict], current_page: int, total_pages: int) -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+
+    for match in matches:
+        date_str = match['match_datetime'].strftime("%d.%m.%Y %H:%M")
+        kb_builder.button(
+            text=f"{date_str} - {match['opponent']}",
+            callback_data=f"match_details_{match['id']}_{current_page}"
+        )
+    kb_builder.adjust(1)
+
+    pagination_buttons = []
+    if total_pages > 1:
+        if current_page > 0:
+            pagination_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"match_results_page_{current_page - 1}"))
+        pagination_buttons.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="match_results_current_page"))
+        if current_page < total_pages - 1:
+            pagination_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"match_results_page_{current_page + 1}"))
+        kb_builder.row(*pagination_buttons)
+
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"))
+    return kb_builder.as_markup()
+
+
+def match_details_keyboard(match_id: int, current_page: int) -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+    kb_builder.row(InlineKeyboardButton(text="⬅️ К списку матчей", callback_data=f"match_results_page_{current_page}"))
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"))
+    return kb_builder.as_markup()
+
+
+def notifications_keyboard(notifications_enabled: bool) -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+    if notifications_enabled:
+        kb_builder.button(text=LEXICON_RU["notifications_disabled"], callback_data="notifications_toggle_off")
+    else:
+        kb_builder.button(text=LEXICON_RU["notifications_enabled"], callback_data="notifications_toggle_on")
+    kb_builder.adjust(1)
+    kb_builder.row(InlineKeyboardButton(text=LEXICON_RU["back_to_main_menu_button"], callback_data="back_to_main_menu"))
+    return kb_builder.as_markup()
+
+def admin_confirm_notification_keyboard() -> InlineKeyboardMarkup:
+    kb_builder = InlineKeyboardBuilder()
+    kb_builder.button(text=LEXICON_RU["admin_send_notification_button"], callback_data="admin_send_notification_yes")
+    kb_builder.button(text=LEXICON_RU["admin_dont_send_notification_button"], callback_data="admin_send_notification_no")
+    kb_builder.adjust(2)
     return kb_builder.as_markup()
 
 

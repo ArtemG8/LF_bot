@@ -10,7 +10,9 @@ async def create_tables(conn):
             telegram_id BIGINT UNIQUE NOT NULL,
             username VARCHAR(255),
             total_score REAL DEFAULT 0.0,
-            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_selected_team_ids INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+            receive_notifications BOOLEAN DEFAULT TRUE
         );
     ''')
 
@@ -29,7 +31,8 @@ async def create_tables(conn):
         CREATE TABLE IF NOT EXISTS players (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
-            position VARCHAR(50) NOT NULL
+            position VARCHAR(50) NOT NULL,
+            order_index INTEGER UNIQUE NOT NULL DEFAULT 0 -- Added order_index
         );
     ''')
 
@@ -76,49 +79,53 @@ async def create_tables(conn):
     print("Таблицы созданы или уже существуют.")
 
 
+# Updated NEW_PLAYERS_DATA with the desired order and emojis
 NEW_PLAYERS_DATA = [
-    {"name": "Alisson", "position": "goalkeeper"},
-    {"name": "Giorgi Mamardashvili", "position": "goalkeeper"},
-    {"name": "Freddie Woodman", "position": "goalkeeper"},
-    {"name": "Armin  Pecsi", "position": "goalkeeper"},
+    {"name": "Alisson Becker (🇧🇷)", "position": "goalkeeper"},
+    {"name": "Giorgi Mamardashvili (🇬🇪)", "position": "goalkeeper"},
+    {"name": "Freddie Woodman (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "goalkeeper"},
+    {"name": "Armin Pecsi (🇭🇺)", "position": "goalkeeper"},
 
+    {"name": "Virgil van Dijk (🇳🇱)", "position": "defender"},
+    {"name": "Ibrahima Konate (🇫🇷)", "position": "defender"},
+    {"name": "Joe Gomez (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "defender"},
+    {"name": "Conor Bradley (🇯🇪)", "position": "defender"},
+    {"name": "Milos Kerkez (🇭🇺)", "position": "defender"},
+    {"name": "Andy Robertson (🏴󠁧󠁢󠁳󠁣󠁴󠁿)", "position": "defender"},
+    {"name": "Jeremie Frimpong (🇳🇱)", "position": "defender"},
+    {"name": "Calvin Ramsay (🏴󠁧󠁢󠁳󠁣󠁴󠁿)", "position": "defender"},
+    {"name": "Giovanni Leoni (🇮🇹)", "position": "defender"},
+    {"name": "Rhys Williams (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "defender"},
+    {"name": "Wellity Lucky (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "defender"},
+    {"name": "Amara Nallo (🏴󠁧󠁢󠁥󠁥󠁮󠁧󠁿)", "position": "defender"},
 
-    {"name": "Ibrahima Konaté", "position": "defender"},
-    {"name": "Giovanni Leoni", "position": "defender"},
-    {"name": "Virgil van Dijk", "position": "defender"},
-    {"name": "Joe Gomez", "position": "defender"},
-    {"name": "Rhys Williams", "position": "defender"},
-    {"name": "Milos Kerkez", "position": "defender"},
-    {"name": "Andrew Robertson", "position": "defender"},
-    {"name": "Jeremie Frimpong", "position": "defender"},
-    {"name": "Conor Bradley", "position": "defender"},
-    {"name": "Andy Robertson", "position": "defender"},
-    {"name": "Calvin Ramsay", "position": "defender"},
+    {"name": "Florian Wirtz (🇩🇪)", "position": "midfielder"},
+    {"name": "Ryan Gravenberch (🇳🇱)", "position": "midfielder"},
+    {"name": "Dominik Szoboszlai (🇭🇺)", "position": "midfielder"},
+    {"name": "Alexis Mac Allister (🇦🇷)", "position": "midfielder"},
+    {"name": "Curtis Jones (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "midfielder"},
+    {"name": "Wataru Endo (🇯🇵)", "position": "midfielder"},
+    {"name": "Trey Nyoni (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "midfielder"},
+    {"name": "Stefan Bajcetic (🇪🇸)", "position": "midfielder"},
+    {"name": "Kieran Morrison (🇯🇪)", "position": "midfielder"},
 
-    {"name": "Ryan Gravenberch", "position": "midfielder"},
-    {"name": "Stefan Bajcetic", "position": "midfielder"},
-    {"name": "Wataru Endo", "position": "midfielder"},
-    {"name": "Alexis Mac Allister", "position": "midfielder"},
-    {"name": "Curtis Jones", "position": "midfielder"},
-    {"name": "Trey Nyoni", "position": "midfielder"},
-    {"name": "Florian Wirtz", "position": "midfielder"},
-    {"name": "Dominik Szoboszlai", "position": "midfielder"},
-
-    {"name": "Cody Gakpo", "position": "forward"},
-    {"name": "Rio Ngumoha", "position": "forward"},
-    {"name": "Mohamed Salah", "position": "forward"},
-    {"name": "Federico Chiesa", "position": "forward"},
-    {"name": "Alexander Isak", "position": "forward"},
-    {"name": "Hugo Ekitiké", "position": "forward"},
+    {"name": "Mohamed Salah (🇪🇬)", "position": "forward"},
+    {"name": "Hugo Ekitike (🇫🇷)", "position": "forward"},
+    {"name": "Alexander Isak (🇸🇪)", "position": "forward"},
+    {"name": "Cody Gakpo (🇳🇱)", "position": "forward"},
+    {"name": "Federico Chiesa (🇮🇹)", "position": "forward"},
+    {"name": "Rio Ngumoha (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "forward"},
+    {"name": "Kaide Gordon (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "forward"},
+    {"name": "Jayden Danns (🏴󠁧󠁢󠁥󠁮󠁧󠁿)", "position": "forward"},
 ]
 
 
 async def insert_initial_data(conn):
-    for player_data in NEW_PLAYERS_DATA:
+    for i, player_data in enumerate(NEW_PLAYERS_DATA):
         await conn.execute('''
-            INSERT INTO players (name, position) VALUES ($1, $2)
-            ON CONFLICT (name) DO NOTHING;
-        ''', player_data["name"], player_data["position"])
+            INSERT INTO players (name, position, order_index) VALUES ($1, $2, $3)
+            ON CONFLICT (name) DO UPDATE SET position = $2, order_index = $3;
+        ''', player_data["name"], player_data["position"], i) # Use i as order_index
 
     await conn.execute('''
         INSERT INTO matches (opponent, match_datetime, status, is_scored) VALUES

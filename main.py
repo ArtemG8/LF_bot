@@ -32,8 +32,8 @@ async def main():
     db = Database(db_pool)
 
     # middleware для передачи db в хэндлеры
-    dp.message.middleware(DatabaseMiddleware(db))
-    dp.callback_query.middleware(DatabaseMiddleware(db))
+    dp.message.middleware(DatabaseMiddleware(db, bot))
+    dp.callback_query.middleware(DatabaseMiddleware(db, bot))
 
     dp.include_router(private_user.router)
     await set_main_menu(bot)

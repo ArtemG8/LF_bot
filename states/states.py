@@ -35,3 +35,5 @@ class AdminStates(StatesGroup):
     # Score Management
     selecting_match_to_score = State()
     entering_player_points = State()
+    entering_notification_message = State()
+    confirming_notification_send = State()

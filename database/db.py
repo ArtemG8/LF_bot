@@ -2,6 +2,7 @@ import asyncpg
 import datetime
 from typing import List, Dict, Optional, Any
 from config import Config
+from collections import defaultdict
 
 
 class Database:
@@ -10,14 +11,14 @@ class Database:
 
     async def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
-            user = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", telegram_id)
+            user = await conn.fetchrow("SELECT *, last_selected_team_ids, receive_notifications FROM users WHERE telegram_id = $1", telegram_id)
             return dict(user) if user else None
 
     async def register_user(self, telegram_id: int, username: str) -> Optional[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
             try:
                 user = await conn.fetchrow(
-                    "INSERT INTO users (telegram_id, username) VALUES ($1, $2) "
+                    "INSERT INTO users (telegram_id, username, last_selected_team_ids, receive_notifications) VALUES ($1, $2, ARRAY[]::INTEGER[], TRUE) "
                     "ON CONFLICT (telegram_id) DO UPDATE SET username = $2 RETURNING *",
                     telegram_id, username
                 )
@@ -49,7 +50,8 @@ class Database:
 
     async def get_players_by_position(self, position: str) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
-            players = await conn.fetch("SELECT * FROM players WHERE position = $1 ORDER BY name ASC", position)
+            # Order by order_index to maintain the order from NEW_PLAYERS_DATA
+            players = await conn.fetch("SELECT * FROM players WHERE position = $1 ORDER BY order_index ASC", position)
             return [dict(p) for p in players]
 
     async def get_user_team(self, user_id: int, match_id: int) -> Optional[Dict[str, Any]]:
@@ -77,24 +79,35 @@ class Database:
 
     async def get_last_user_team(self, user_id: int) -> Optional[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
-            team = await conn.fetchrow(
-                "SELECT * FROM user_teams WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1",
+            # Теперь "last_user_team" хранится непосредственно в таблице users
+            user_data = await conn.fetchrow(
+                "SELECT last_selected_team_ids FROM users WHERE id = $1",
                 user_id
             )
-            return dict(team) if team else None
+            if user_data and user_data['last_selected_team_ids'] is not None:
+                return {'player_ids': user_data['last_selected_team_ids']}
+            return None
+
+    async def save_last_selected_team(self, user_id: int, player_ids: List[int]) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET last_selected_team_ids = $1 WHERE id = $2",
+                player_ids, user_id
+            )
 
     async def get_player_names_from_ids(self, player_ids: List[int]) -> List[str]:
         if not player_ids:
             return []
         async with self.pool.acquire() as conn:
             players = await conn.fetch(
-                "SELECT name FROM players WHERE id = ANY($1::int[]) ORDER BY position, name", player_ids
+                "SELECT name FROM players WHERE id = ANY($1::int[]) ORDER BY position, order_index", player_ids
             )
             return [p['name'] for p in players]
 
     async def get_user_team_with_names(self, user_id: int, match_id: int) -> Optional[Dict[str, Any]]:
         team_data = await self.get_user_team(user_id, match_id)
         if team_data:
+            # This method will now leverage get_player_names_from_ids
             player_names = await self.get_player_names_from_ids(team_data['player_ids'])
             team_data['player_names'] = player_names
         return team_data
@@ -193,15 +206,17 @@ class Database:
 
     async def get_all_players_sorted(self) -> List[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
-            players = await conn.fetch("SELECT * FROM players ORDER BY position, name")
+            players = await conn.fetch("SELECT * FROM players ORDER BY order_index")
             return [dict(p) for p in players]
 
     async def add_player(self, name: str, position: str) -> Optional[Dict[str, Any]]:
         async with self.pool.acquire() as conn:
             try:
+                max_order_index = await conn.fetchval("SELECT COALESCE(MAX(order_index), -1) FROM players")
+                new_order_index = max_order_index + 1
                 player = await conn.fetchrow(
-                    "INSERT INTO players (name, position) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING RETURNING *",
-                    name, position
+                    "INSERT INTO players (name, position, order_index) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING RETURNING *",
+                    name, position, new_order_index
                 )
                 return dict(player) if player else None
             except Exception as e:
@@ -211,6 +226,8 @@ class Database:
     async def update_player(self, player_id: int, name: str, position: str) -> bool:
         async with self.pool.acquire() as conn:
             try:
+                # When updating, we don't change the order_index based on name/position changes,
+                # as order_index reflects the global order.
                 result = await conn.execute(
                     "UPDATE players SET name = $1, position = $2 WHERE id = $3",
                     name, position, player_id
@@ -289,3 +306,61 @@ class Database:
         async with self.pool.acquire() as conn:
             match = await conn.fetchrow("SELECT * FROM matches WHERE id = $1", match_id)
             return dict(match) if match else None
+
+    async def update_user_notification_preference(self, user_id: int, preference: bool) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET receive_notifications = $1 WHERE id = $2",
+                preference, user_id
+            )
+
+    async def get_users_with_notifications_enabled(self) -> List[Dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            users = await conn.fetch(
+                "SELECT telegram_id FROM users WHERE receive_notifications = TRUE"
+            )
+            return [dict(u) for u in users]
+
+    async def get_finished_matches_paginated(self, offset: int, limit: int) -> Dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE matches SET status = 'finished' WHERE match_datetime < NOW() AND status = 'upcoming'"
+            )
+            total_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM matches WHERE status = 'finished' AND is_scored = TRUE"
+            )
+            matches = await conn.fetch(
+                "SELECT * FROM matches WHERE status = 'finished' AND is_scored = TRUE "
+                "ORDER BY match_datetime DESC OFFSET $1 LIMIT $2",
+                offset, limit
+            )
+            return {
+                "matches": [dict(m) for m in matches],
+                "total_count": total_count
+            }
+
+    async def get_match_player_scores_and_user_teams(self, match_id: int, user_id: int) -> Dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            # Получить очки всех игроков для данного матча
+            player_scores = await conn.fetch(
+                """
+                SELECT mp.player_id, p.name, p.position, mp.points
+                FROM match_player_points mp
+                JOIN players p ON mp.player_id = p.id
+                WHERE mp.match_id = $1
+                ORDER BY mp.points DESC, p.name ASC
+                """,
+                match_id
+            )
+
+            # Получить команду текущего пользователя для данного матча
+            user_team_data = await conn.fetchrow(
+                "SELECT player_ids FROM user_teams WHERE user_id = $1 AND match_id = $2",
+                user_id, match_id
+            )
+            user_team_player_ids = user_team_data['player_ids'] if user_team_data else []
+
+            return {
+                "player_scores": [dict(row) for row in player_scores],
+                "user_team_player_ids": user_team_player_ids
+            }
