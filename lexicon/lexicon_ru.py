@@ -107,7 +107,7 @@ LEXICON_RU = {
     "admin_confirm_remove_all_players": "ВНИМАНИЕ! Вы собираетесь удалить ВСЕХ игроков из базы данных. Это действие необратимо и приведет к удалению всех составов пользователей. Вы уверены?",
     "admin_all_players_removed_success": "Все игроки успешно удалены.",
     "match_results_details_header": "Результаты матча: {opponent} ({date} {time})",
-    "match_player_score_entry": "{}. {player_name} ({position}) - {points} очков {emoji}",
+    "match_player_score_entry": "{}. {player_name} - {points} очков {emoji}",
     "match_total_user_score": "Ваша команда набрала: {score} очков.",
     "match_no_team_selected": "Вы не выбрали команду на этот матч.",
     "main_menu_button_notifications": "Уведомления",
